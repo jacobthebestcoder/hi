@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>💬 Custom Emoji Chat</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.css">
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+  <style>
+    body {
+      background: #1e1e2f;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 10px;
+      color: #7289da;
+    }
+    #controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    input, select, button {
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      background: #2c2c3f;
+      color: white;
+    }
+    button {
+      background: #7289da;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #5b6dab;
+    }
+    #currentPfp {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    #chat {
+      background: #2c2c3f;
+      padding: 15px;
+      border-radius: 10px;
+      height: 400px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+    }
+    .message {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      background: #393955;
+      padding: 10px;
+      border-radius: 10px;
+      position: relative;
+    }
+    .avatar img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .msg-content {
+      flex-grow: 1;
+    }
+    .name {
+      font-weight: bold;
+      color: #7289da;
+    }
+    .time {
+      font-size: 12px;
+      color: #aaa;
+      margin-left: 8px;
+    }
+    .text {
+      margin-top: 5px;
+      word-break: break-word;
+    }
+    emoji-picker {
+      position: absolute;
+      z-index: 999;
+    }
+    .reaction {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 2px 6px;
+      border-radius: 12px;
+      background: #444;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .reaction.reacted {
+      background: #7289da;
+    }
+    .add-custom-emoji input {
+      margin-top: 6px;
+      padding: 3px;
+      background: #444;
+      border-radius: 6px;
+      color: white;
+      border: none;
+      text-align: center;
+      width: 40px;
+    }
+    .picker-button {
+      background: #444;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      margin-left: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h2>💬 Emoji Chat with Custom Emojis</h2>
+
+<div id="controls">
+  <input type="text" id="username" placeholder="Your name">
+  <select id="groupSelector">
+    <option value="Main">Main</option>
+    <option value="group1">Group 1</option>
+    <option value="group2">Group 2</option>
+  </select>
+  <input type="file" id="pfpUpload" accept="image/*">
+  <button onclick="uploadPFP()">Upload PFP</button>
+  <img id="currentPfp" src="" alt="pfp">
+</div>
+
+<div id="chat"></div>
+
+<div id="controls">
+  <input type="text" id="message" placeholder="Type message...">
+  <button onclick="toggleEmojiPicker()">😊</button>
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="clearChat()" style="background: red;">Clear</button>
+</div>
+
+<emoji-picker id="emojiPicker" style="display: none;"></emoji-picker>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCCX8Us-t02w8UQvo4DKgGp2d2o8B5iR3M",
+    authDomain: "cha1-3efb4.firebaseapp.com",
+    databaseURL: "https://cha1-3efb4-default-rtdb.firebaseio.com",
+    projectId: "cha1-3efb4",
+    storageBucket: "cha1-3efb4.appspot.com",
+    messagingSenderId: "818967130586",
+    appId: "1:818967130586:web:bc7456c7817aacad9d50e3",
+    measurementId: "G-747SW9EYPZ"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const auth = firebase.auth();
+
+  const chatBox = document.getElementById('chat');
+  const msgInput = document.getElementById('message');
+  const groupSelector = document.getElementById('groupSelector');
+  const usernameInput = document.getElementById('username');
+  const emojiPicker = document.getElementById('emojiPicker');
+  const pfpUploadInput = document.getElementById('pfpUpload');
+  const currentPfpImg = document.getElementById('currentPfp');
+
+  let currentGroup = "Main";
+  let currentUser = null;
+  let currentRef = null;
+  let pfpBase64 = getCookie('pfpBase64') || null;
+  let pickerTargetMsgKey = null;
+
+  if (getCookie('username')) usernameInput.value = getCookie('username');
+  if (pfpBase64) currentPfpImg.src = pfpBase64;
+
+  auth.signInAnonymously().then(user => {
+    currentUser = user.user;
+    switchGroup(currentGroup);
+  });
+
+  groupSelector.addEventListener('change', () => {
+    currentGroup = groupSelector.value;
+    switchGroup(currentGroup);
+  });
+
+  function switchGroup(group) {
+    chatBox.innerHTML = '';
+    if (currentRef) currentRef.off();
+    currentRef = db.ref(`messages/${group}`);
+    currentRef.on('child_added', snap => addMessage(snap.key, snap.val()));
+    currentRef.on('child_changed', snap => refreshMessage(snap.key, snap.val()));
+  }
+
+  function addMessage(msgKey, msg) {
+    const div = document.createElement('div');
+    div.className = 'message';
+    div.id = `msg-${msgKey}`;
+    const reactionHTML = generateReactionHTML(msg.reactions || {}, msgKey);
+    const customInputHTML = `
+      <div class="add-custom-emoji">
+        <button class="picker-button" onclick="openMessageEmojiPicker(event, '${msgKey}')">😊</button>
+      </div>`;
+
+    div.innerHTML = `
+      <div class="avatar"><img src="${msg.pfp || 'https://placehold.co/40x40'}" alt="pfp"></div>
+      <div class="msg-content">
+        <div><span class="name">${msg.name}</span><span class="time">${msg.time}</span></div>
+        <div class="text">${msg.text}</div>
+        <div class="reactions">${reactionHTML}</div>
+        ${customInputHTML}
+      </div>`;
+
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function refreshMessage(msgKey, msg) {
+    const msgElem = document.getElementById(`msg-${msgKey}`);
+    if (msgElem) {
+      msgElem.querySelector('.reactions').innerHTML = generateReactionHTML(msg.reactions || {}, msgKey);
+    }
+  }
+
+  function generateReactionHTML(reactions, msgKey) {
+    if (!reactions) return '';
+    let html = '';
+    for (const [emoji, userMap] of Object.entries(reactions)) {
+      const userIds = Object.keys(userMap);
+      const count = userIds.length;
+      const hasReacted = userMap[currentUser.uid];
+      html += `<span class="reaction ${hasReacted ? 'reacted' : ''}" onclick="toggleReaction('${msgKey}', '${emoji}')">${emoji} ${count}</span>`;
+    }
+    return html;
+  }
+
+  function toggleReaction(msgKey, emoji) {
+    const ref = db.ref(`messages/${currentGroup}/${msgKey}/reactions/${emoji}`);
+    ref.once('value').then(snapshot => {
+      const data = snapshot.val() || {};
+      if (data[currentUser.uid]) {
+        ref.child(currentUser.uid).remove();
+      } else {
+        ref.child(currentUser.uid).set(true);
+      }
+    });
+  }
+
+  function addCustomEmoji(inputElem, msgKey) {
+    const emoji = inputElem.value.trim();
+    if (!emoji) return;
+    toggleReaction(msgKey, emoji);
+    inputElem.value = '';
+  }
+
+  function sendMessage() {
+    const name = usernameInput.value.trim();
+    const text = msgInput.value.trim();
+    if (!name || !text) return;
+
+    setCookie('username', name, 7);
+
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    db.ref(`messages/${currentGroup}`).push({
+      name,
+      text,
+      time,
+      pfp: pfpBase64 || null,
+    });
+    msgInput.value = '';
+  }
+
+  async function clearChat() {
+    const pw = await prompt("Admin password to clear?");
+    if (pw === "2013") {
+      db.ref(`messages/${currentGroup}`).remove();
+      chatBox.innerHTML = '';
+    } else {
+      alert("Wrong password!");
+    }
+  }
+
+  function uploadPFP() {
+    const file = pfpUploadInput.files[0];
+    if (!file) return alert("Choose a file first!");
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = 64;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, size, size);
+        const resized = canvas.toDataURL('image/jpeg', 0.7);
+        pfpBase64 = resized;
+        currentPfpImg.src = resized;
+        setCookie('pfpBase64', resized, 7);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function toggleEmojiPicker() {
+    emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'block' : 'none';
+    pickerTargetMsgKey = null;
+  }
+
+  function openMessageEmojiPicker(event, msgKey) {
+    emojiPicker.style.display = 'block';
+    pickerTargetMsgKey = msgKey;
+    const rect = event.target.getBoundingClientRect();
+    emojiPicker.style.top = `${rect.top + window.scrollY - 300}px`;
+    emojiPicker.style.left = `${rect.left}px`;
+  }
+
+  emojiPicker.addEventListener('emoji-click', event => {
+    const emoji = event.detail.unicode;
+    if (pickerTargetMsgKey) {
+      toggleReaction(pickerTargetMsgKey, emoji);
+      emojiPicker.style.display = 'none';
+    } else {
+      msgInput.value += emoji;
+      emojiPicker.style.display = 'none';
+      msgInput.focus();
+    }
+  });
+
+  function setCookie(name, value, days) {
+    const expires = new Date(Date.now() + days * 86400000).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+  }
+
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+</script>
+</body>
+</html>

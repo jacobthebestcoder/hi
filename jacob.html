@@ -1,30 +1,73 @@
 <!DOCTYPE html>
-<html lang=en>
-  <head>
-<link rel="stylesheet" type="text/css" href="https://hello12111211.github.io/hi/jacob.css">
- <title>About Blank</title>
-    <script>
-        // Change the URL to 'about:blank' without reloading the page
-        history.pushState(null, null, 'about:blank');
-        
-        // Load your actual content inside an iframe or as per your need
-        window.onload = function() {
-            document.body.innerHTML = '<h1></h1>'; // Your actual content goes here
-        };
-    </script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Matrix Rain</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      overflow: hidden;
+      font-family: monospace;
+    }
 
-
-    
-
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
 <body>
-    <iframe src="https://hello12111211.github.io/Climate_change/hi.html"></iframe>
+  <canvas id="matrix"></canvas>
+
+  <script>
+    const canvas = document.getElementById("matrix");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    const characters = "アァイゥエオカキクケコABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$%#*";
+    const messages = ["NEO", "WAKE UP", "GLITCH", "REALITY IS BROKEN", "THE MATRIX"];
+    const letters = (characters + messages.join("")).split("");
+
+    const fontSize = 16;
+    const columns = Math.floor(window.innerWidth / fontSize);
+    const drops = Array(columns).fill(1);
+
+    function draw() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#0f0";
+      ctx.font = fontSize + "px monospace";
+
+      for (let i = 0; i < drops.length; i++) {
+        const char = letters[Math.floor(Math.random() * letters.length)];
+        ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+
+        if (Math.random() < 0.002) {
+          const msg = messages[Math.floor(Math.random() * messages.length)];
+          for (let j = 0; j < msg.length; j++) {
+            ctx.fillText(msg[j], i * fontSize, (drops[i] + j) * fontSize);
+          }
+          drops[i] += msg.length;
+        } else {
+          drops[i]++;
+        }
+
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+      }
+    }
+
+    setInterval(draw, 50); // Start the animation immediately
+  </script>
 </body>
-
-    
-  </head>
-  <body>
-
-
-    
-  </body>
 </html>
